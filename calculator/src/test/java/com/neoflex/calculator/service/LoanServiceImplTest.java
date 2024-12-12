@@ -31,10 +31,10 @@ public class LoanServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        Mockito.when(loanProperties.getBaseRate()).thenReturn(BigDecimal.valueOf(15.0));
-        Mockito.when(loanProperties.getInsuranceDiscount()).thenReturn(BigDecimal.valueOf(3.0));
-        Mockito.when(loanProperties.getSalaryClientDiscount()).thenReturn(BigDecimal.valueOf(1.0));
-        Mockito.when(loanProperties.getInsuranceCost()).thenReturn(BigDecimal.valueOf(1000.0));
+        Mockito.when(loanProperties.getBaseRate()).thenReturn(BigDecimal.valueOf(15.00));
+        Mockito.when(loanProperties.getInsuranceDiscount()).thenReturn(BigDecimal.valueOf(3.00));
+        Mockito.when(loanProperties.getSalaryClientDiscount()).thenReturn(BigDecimal.valueOf(1.00));
+        Mockito.when(loanProperties.getInsuranceCost()).thenReturn(BigDecimal.valueOf(1000.00));
     }
 
     @Test
@@ -45,7 +45,7 @@ public class LoanServiceImplTest {
         request.setEmail("test@example.com");
         request.setPassportSeries("1234");
         request.setPassportNumber("123456");
-        request.setBirthDate(LocalDate.of(1990, 1, 1));
+        request.setBirthDate(LocalDate.of(2000, 1, 1));
 
         List<LoanOfferDto> offers = loanService.generateLoanOffers(request);
 
@@ -60,7 +60,7 @@ public class LoanServiceImplTest {
         LoanStatementRequestDto request = new LoanStatementRequestDto();
         request.setAmount(BigDecimal.valueOf(100000));
         request.setTerm(12);
-        request.setEmail("invalid-email");
+        request.setEmail("invalid email");
         request.setPassportSeries("1234");
         request.setPassportNumber("123456");
         request.setBirthDate(LocalDate.of(1990, 1, 1));
@@ -106,7 +106,7 @@ public class LoanServiceImplTest {
         scoringData.setIsInsuranceEnabled(true);
         scoringData.setIsSalaryClient(true);
         scoringData.setGender(Gender.MALE);
-        scoringData.setBirthDate(LocalDate.of(1990, 1, 1));
+        scoringData.setBirthDate(LocalDate.of(2000, 1, 1));
         scoringData.setEmployment(new EmploymentDto());
         scoringData.getEmployment().setSalary(BigDecimal.valueOf(50000));
         scoringData.getEmployment().setEmploymentStatus(EmploymentStatus.EMPLOYED);
@@ -127,9 +127,9 @@ public class LoanServiceImplTest {
         LoanStatementRequestDto request = new LoanStatementRequestDto();
         request.setAmount(BigDecimal.valueOf(100000));
         request.setTerm(12);
-        request.setEmail("test@example.com");
+        request.setEmail("test@mail.com");
         request.setPassportSeries("1234");
-        request.setPassportNumber("12345"); // Invalid passport number
+        request.setPassportNumber("12345");
         request.setBirthDate(LocalDate.of(1990, 1, 1));
 
         try {
@@ -138,5 +138,239 @@ public class LoanServiceImplTest {
         } catch (LoanServiceException e) {
             Assertions.assertEquals("Invalid passport details.", e.getMessage());
         }
+    }
+
+    @Test
+    public void testLoanAmountBelowMinimum() {
+        LoanStatementRequestDto request = new LoanStatementRequestDto();
+        request.setAmount(BigDecimal.valueOf(15000));
+        request.setTerm(12);
+        request.setEmail("test@mail.com");
+        request.setPassportSeries("1234");
+        request.setPassportNumber("123456");
+        request.setBirthDate(LocalDate.of(1990, 1, 1));
+
+        try {
+            loanService.generateLoanOffers(request);
+            Assertions.fail("Expected LoanServiceException due to loan amount below minimum");
+        } catch (LoanServiceException e) {
+            Assertions.assertEquals("Loan amount must be at least 20000.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testLoanTermBelowMinimum() {
+        LoanStatementRequestDto request = new LoanStatementRequestDto();
+        request.setAmount(BigDecimal.valueOf(50000));
+        request.setTerm(5);
+        request.setEmail("test@mail.com");
+        request.setPassportSeries("1234");
+        request.setPassportNumber("123456");
+        request.setBirthDate(LocalDate.of(1990, 1, 1));
+
+        try {
+            loanService.generateLoanOffers(request);
+            Assertions.fail("Expected LoanServiceException due to loan term below minimum");
+        } catch (LoanServiceException e) {
+            Assertions.assertEquals("Loan term must be at least 6 months.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testBorrowerBelowMinimumAge() {
+        LoanStatementRequestDto request = new LoanStatementRequestDto();
+        request.setAmount(BigDecimal.valueOf(50000));
+        request.setTerm(12);
+        request.setEmail("test@mail.com");
+        request.setPassportSeries("1234");
+        request.setPassportNumber("123456");
+        request.setBirthDate(LocalDate.now().minusYears(17));
+
+        try {
+            loanService.generateLoanOffers(request);
+            Assertions.fail("Expected LoanServiceException due to borrower below minimum age");
+        } catch (LoanServiceException e) {
+            Assertions.assertEquals("Borrower must be at least 18 years old.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testInsufficientWorkExperience() {
+        ScoringDataDto scoringData = new ScoringDataDto();
+        scoringData.setAmount(BigDecimal.valueOf(100000));
+        scoringData.setTerm(12);
+        scoringData.setIsInsuranceEnabled(true);
+        scoringData.setIsSalaryClient(true);
+        scoringData.setGender(Gender.MALE);
+        scoringData.setBirthDate(LocalDate.of(1990, 1, 1));
+        EmploymentDto employment = new EmploymentDto();
+        employment.setEmploymentStatus(EmploymentStatus.EMPLOYED);
+        employment.setSalary(BigDecimal.valueOf(50000));
+        employment.setWorkExperienceTotal(10);
+        employment.setWorkExperienceCurrent(1);
+        scoringData.setEmployment(employment);
+
+        try {
+            loanService.calculateCredit(scoringData);
+            Assertions.fail("Expected LoanServiceException due to insufficient work experience");
+        } catch (LoanServiceException e) {
+            Assertions.assertEquals("Insufficient work experience.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testLoanAmountExceedsIncomeLimit() {
+        ScoringDataDto scoringData = new ScoringDataDto();
+        scoringData.setAmount(BigDecimal.valueOf(1500000));
+        scoringData.setTerm(12);
+        scoringData.setIsInsuranceEnabled(true);
+        scoringData.setIsSalaryClient(true);
+        scoringData.setGender(Gender.MALE);
+        scoringData.setBirthDate(LocalDate.of(1990, 1, 1));
+        EmploymentDto employment = new EmploymentDto();
+        employment.setEmploymentStatus(EmploymentStatus.EMPLOYED);
+        employment.setSalary(BigDecimal.valueOf(50000));
+        employment.setWorkExperienceTotal(20);
+        employment.setWorkExperienceCurrent(10);
+        scoringData.setEmployment(employment);
+
+        try {
+            loanService.calculateCredit(scoringData);
+            Assertions.fail("Expected LoanServiceException due to loan amount exceeding income limit");
+        } catch (LoanServiceException e) {
+            Assertions.assertEquals("Loan amount exceeds 24 times monthly income.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testLoanForUnemployedBorrower() {
+        ScoringDataDto scoringData = new ScoringDataDto();
+        scoringData.setAmount(BigDecimal.valueOf(50000));
+        scoringData.setTerm(12);
+        scoringData.setIsInsuranceEnabled(true);
+        scoringData.setIsSalaryClient(true);
+        scoringData.setGender(Gender.MALE);
+        scoringData.setBirthDate(LocalDate.of(1990, 1, 1));
+        EmploymentDto employment = new EmploymentDto();
+        employment.setEmploymentStatus(EmploymentStatus.UNEMPLOYED);
+        scoringData.setEmployment(employment);
+        employment.setSalary(BigDecimal.valueOf(50000));
+        employment.setWorkExperienceTotal(20);
+        employment.setWorkExperienceCurrent(10);
+
+        try {
+            loanService.calculateCredit(scoringData);
+            Assertions.fail("Expected LoanServiceException due to unemployed borrower");
+        } catch (LoanServiceException e) {
+            Assertions.assertEquals("Loan cannot be issued to unemployed borrowers.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testEmploymentStatusRateChanges() {
+        ScoringDataDto scoringData = new ScoringDataDto();
+        scoringData.setAmount(BigDecimal.valueOf(50000));
+        scoringData.setTerm(12);
+        scoringData.setGender(Gender.MALE);
+        scoringData.setBirthDate(LocalDate.of(2000, 1, 1));
+        scoringData.setMaritalStatus(MaritalStatus.SINGLE);
+        EmploymentDto employment = new EmploymentDto();
+        employment.setSalary(BigDecimal.valueOf(50000));
+        employment.setPosition(Position.WORKER);
+        employment.setWorkExperienceTotal(20);
+        employment.setWorkExperienceCurrent(10);
+
+        employment.setEmploymentStatus(EmploymentStatus.SELF_EMPLOYED);
+        scoringData.setEmployment(employment);
+        Assertions.assertEquals(
+                loanProperties.getBaseRate().add(BigDecimal.valueOf(2)).setScale(2, RoundingMode.HALF_UP),
+                loanService.calculateCredit(scoringData).getRate()
+        );
+
+        employment.setEmploymentStatus(EmploymentStatus.BUSINESS_OWNER);
+        scoringData.setEmployment(employment);
+        Assertions.assertEquals(
+                loanProperties.getBaseRate().add(BigDecimal.valueOf(1)).setScale(2, RoundingMode.HALF_UP),
+                loanService.calculateCredit(scoringData).getRate()
+        );
+    }
+
+    @Test
+    public void testGenderRateChanges() {
+        ScoringDataDto scoringData = new ScoringDataDto();
+        scoringData.setAmount(BigDecimal.valueOf(50000));
+        scoringData.setTerm(12);
+        scoringData.setGender(Gender.NON_BINARY);
+        scoringData.setBirthDate(LocalDate.of(1990, 1, 1));
+        EmploymentDto employment = new EmploymentDto();
+        employment.setEmploymentStatus(EmploymentStatus.EMPLOYED);
+        employment.setSalary(BigDecimal.valueOf(50000));
+        employment.setPosition(Position.WORKER);
+        employment.setWorkExperienceTotal(20);
+        employment.setWorkExperienceCurrent(10);
+        scoringData.setEmployment(employment);
+        scoringData.setMaritalStatus(MaritalStatus.SINGLE);
+
+        Assertions.assertEquals(
+                loanProperties.getBaseRate().add(BigDecimal.valueOf(7)).setScale(2, RoundingMode.HALF_UP),
+                loanService.calculateCredit(scoringData).getRate()
+        );
+    }
+
+    @Test
+    public void testPositionRateChanges() {
+        ScoringDataDto scoringData = new ScoringDataDto();
+        scoringData.setAmount(BigDecimal.valueOf(50000));
+        scoringData.setTerm(12);
+        scoringData.setGender(Gender.MALE);
+        scoringData.setBirthDate(LocalDate.of(2000, 1, 1));
+        EmploymentDto employment = new EmploymentDto();
+        employment.setEmploymentStatus(EmploymentStatus.EMPLOYED);
+        employment.setSalary(BigDecimal.valueOf(50000));
+        employment.setWorkExperienceTotal(20);
+        employment.setWorkExperienceCurrent(10);
+
+        employment.setPosition(Position.MID_MANAGER);
+        scoringData.setEmployment(employment);
+        scoringData.setMaritalStatus(MaritalStatus.SINGLE);
+        Assertions.assertEquals(
+                loanProperties.getBaseRate().subtract(BigDecimal.valueOf(2).setScale(2, RoundingMode.HALF_UP)),
+                loanService.calculateCredit(scoringData).getRate()
+        );
+
+        employment.setPosition(Position.TOP_MANAGER);
+        scoringData.setEmployment(employment);
+        Assertions.assertEquals(
+                loanProperties.getBaseRate().subtract(BigDecimal.valueOf(3).setScale(2, RoundingMode.HALF_UP)),
+                loanService.calculateCredit(scoringData).getRate()
+        );
+    }
+
+    @Test
+    public void testMaritalStatusRateChanges() {
+        ScoringDataDto scoringData = new ScoringDataDto();
+        scoringData.setAmount(BigDecimal.valueOf(50000));
+        scoringData.setTerm(12);
+        scoringData.setGender(Gender.FEMALE);
+        scoringData.setBirthDate(LocalDate.of(1980, 1, 1));
+        EmploymentDto employment = new EmploymentDto();
+        employment.setEmploymentStatus(EmploymentStatus.EMPLOYED);
+        employment.setSalary(BigDecimal.valueOf(50000));
+        employment.setPosition(Position.WORKER);
+        employment.setWorkExperienceTotal(20);
+        employment.setWorkExperienceCurrent(10);
+        scoringData.setEmployment(employment);
+
+        scoringData.setMaritalStatus(MaritalStatus.MARRIED);
+        Assertions.assertEquals(
+                loanProperties.getBaseRate().subtract(BigDecimal.valueOf(6).setScale(2, RoundingMode.HALF_UP)),
+                loanService.calculateCredit(scoringData).getRate()
+        );
+
+        scoringData.setMaritalStatus(MaritalStatus.DIVORCED);
+        Assertions.assertEquals(
+                loanProperties.getBaseRate().subtract(BigDecimal.valueOf(2).setScale(2, RoundingMode.HALF_UP)),
+                loanService.calculateCredit(scoringData).getRate()
+        );
     }
 }
