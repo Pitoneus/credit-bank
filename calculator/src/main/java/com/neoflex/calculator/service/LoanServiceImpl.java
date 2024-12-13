@@ -4,6 +4,8 @@ import com.neoflex.calculator.config.LoanProperties;
 import com.neoflex.calculator.dto.*;
 import com.neoflex.calculator.enums.EmploymentStatus;
 import com.neoflex.calculator.enums.Gender;
+import com.neoflex.calculator.enums.MaritalStatus;
+import com.neoflex.calculator.enums.Position;
 import com.neoflex.calculator.exception.LoanServiceException;
 import com.neoflex.calculator.service.api.LoanService;
 import lombok.RequiredArgsConstructor;
@@ -25,9 +27,9 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class LoanServiceImpl implements LoanService {
 
-    private final LoanProperties loanProperties;
-
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[a-z0-9A-Z_!#$%&'*+/=?`{|}~^.-]+@[a-z0-9A-Z.-]+$");
+
+    private final LoanProperties loanProperties;
 
     @Override
     public List<LoanOfferDto> generateLoanOffers(LoanStatementRequestDto request) {
@@ -41,7 +43,6 @@ public class LoanServiceImpl implements LoanService {
             for (boolean salaryClient : salaryClientOptions) {
                 LoanOfferDto offer = createLoanOffer(request, insurance, salaryClient);
                 log.debug("Generated loan offer: {}", offer);
-
                 loanOffers.add(offer);
             }
         }
@@ -50,6 +51,25 @@ public class LoanServiceImpl implements LoanService {
         log.debug("Sorted loan offers by rate: {}", loanOffers);
 
         return loanOffers;
+    }
+
+    private void validatePreScoring(LoanStatementRequestDto request) {
+        if (request.getAmount().compareTo(BigDecimal.valueOf(20000)) < 0) {
+            throw new LoanServiceException("Loan amount must be at least 20000.");
+        }
+        if (request.getTerm() < 6) {
+            throw new LoanServiceException("Loan term must be at least 6 months.");
+        }
+        if (!EMAIL_PATTERN.matcher(request.getEmail()).matches()) {
+            throw new LoanServiceException("Invalid email format.");
+        }
+        if (request.getPassportSeries().length() != 4 || request.getPassportNumber().length() != 6) {
+            throw new LoanServiceException("Invalid passport details.");
+        }
+        LocalDate birthDate = request.getBirthDate();
+        if (Period.between(birthDate, LocalDate.now()).getYears() < 18) {
+            throw new LoanServiceException("Borrower must be at least 18 years old.");
+        }
     }
 
     private LoanOfferDto createLoanOffer(LoanStatementRequestDto request, boolean isInsuranceEnabled, boolean isSalaryClient) {
@@ -102,25 +122,6 @@ public class LoanServiceImpl implements LoanService {
         return credit;
     }
 
-    private void validatePreScoring(LoanStatementRequestDto request) {
-        if (request.getAmount().compareTo(BigDecimal.valueOf(20000)) < 0) {
-            throw new LoanServiceException("Loan amount must be at least 20000.");
-        }
-        if (request.getTerm() < 6) {
-            throw new LoanServiceException("Loan term must be at least 6 months.");
-        }
-        if (!EMAIL_PATTERN.matcher(request.getEmail()).matches()) {
-            throw new LoanServiceException("Invalid email format.");
-        }
-        if (request.getPassportSeries().length() != 4 || request.getPassportNumber().length() != 6) {
-            throw new LoanServiceException("Invalid passport details.");
-        }
-        LocalDate birthDate = request.getBirthDate();
-        if (Period.between(birthDate, LocalDate.now()).getYears() < 18) {
-            throw new LoanServiceException("Borrower must be at least 18 years old.");
-        }
-    }
-
     private void validateScoring(ScoringDataDto scoringData) {
         LocalDate birthDate = scoringData.getBirthDate();
         int age = Period.between(birthDate, LocalDate.now()).getYears();
@@ -139,32 +140,27 @@ public class LoanServiceImpl implements LoanService {
         }
     }
 
-    private BigDecimal calculateMonthlyPayment(BigDecimal amount, BigDecimal rate, Integer term) {
-        BigDecimal monthlyRate = rate.divide(BigDecimal.valueOf(1200), 10, RoundingMode.HALF_UP);
-        BigDecimal numerator = monthlyRate.multiply(amount);
-        BigDecimal denominator = BigDecimal.ONE.subtract(BigDecimal.ONE.add(monthlyRate).pow(-term, MathContext.DECIMAL128));
-        BigDecimal monthlyPayment = numerator.divide(denominator, 2, RoundingMode.HALF_UP);
-        log.debug("Calculated monthly payment: {}", monthlyPayment);
-
-        return monthlyPayment;
-    }
-
     private BigDecimal determineRate(ScoringDataDto scoringData) {
         BigDecimal rate = loanProperties.getBaseRate();
-
-        switch (scoringData.getEmployment().getEmploymentStatus()) {
-            case SELF_EMPLOYED -> rate = rate.add(BigDecimal.valueOf(2));
-            case BUSINESS_OWNER -> rate = rate.add(BigDecimal.valueOf(1));
+        EmploymentStatus employmentStatus = scoringData.getEmployment().getEmploymentStatus();
+        if (employmentStatus == EmploymentStatus.SELF_EMPLOYED) {
+            rate = rate.add(BigDecimal.valueOf(2));
+        } else if (employmentStatus == EmploymentStatus.BUSINESS_OWNER) {
+            rate = rate.add(BigDecimal.valueOf(1));
         }
 
-        switch (scoringData.getEmployment().getPosition()) {
-            case MID_MANAGER -> rate = rate.subtract(BigDecimal.valueOf(2));
-            case TOP_MANAGER -> rate = rate.subtract(BigDecimal.valueOf(3));
+        Position position = scoringData.getEmployment().getPosition();
+        if (position == Position.MID_MANAGER) {
+            rate = rate.subtract(BigDecimal.valueOf(2));
+        } else if (position == Position.TOP_MANAGER) {
+            rate = rate.subtract(BigDecimal.valueOf(3));
         }
 
-        switch (scoringData.getMaritalStatus()) {
-            case MARRIED -> rate = rate.subtract(BigDecimal.valueOf(3));
-            case DIVORCED -> rate = rate.add(BigDecimal.valueOf(1));
+        MaritalStatus maritalStatus = scoringData.getMaritalStatus();
+        if (maritalStatus == MaritalStatus.MARRIED) {
+            rate = rate.subtract(BigDecimal.valueOf(3));
+        } else if (maritalStatus == MaritalStatus.DIVORCED) {
+            rate = rate.add(BigDecimal.valueOf(1));
         }
 
         int age = Period.between(scoringData.getBirthDate(), LocalDate.now()).getYears();
@@ -184,6 +180,16 @@ public class LoanServiceImpl implements LoanService {
         log.debug("Calculated PSK: {}", psk);
 
         return psk;
+    }
+
+    private BigDecimal calculateMonthlyPayment(BigDecimal amount, BigDecimal rate, Integer term) {
+        BigDecimal monthlyRate = rate.divide(BigDecimal.valueOf(1200), 10, RoundingMode.HALF_UP);
+        BigDecimal numerator = monthlyRate.multiply(amount);
+        BigDecimal denominator = BigDecimal.ONE.subtract(BigDecimal.ONE.add(monthlyRate).pow(-term, MathContext.DECIMAL128));
+        BigDecimal monthlyPayment = numerator.divide(denominator, 2, RoundingMode.HALF_UP);
+        log.debug("Calculated monthly payment: {}", monthlyPayment);
+
+        return monthlyPayment;
     }
 
     private List<PaymentScheduleElementDto> generatePaymentSchedule(BigDecimal amount, BigDecimal rate, Integer term) {

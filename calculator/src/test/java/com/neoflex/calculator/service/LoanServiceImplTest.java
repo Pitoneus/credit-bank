@@ -65,12 +65,10 @@ public class LoanServiceImplTest {
         request.setPassportNumber("123456");
         request.setBirthDate(LocalDate.of(1990, 1, 1));
 
-        try {
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.generateLoanOffers(request);
-            Assertions.fail("Expected LoanServiceException due to invalid email format");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Invalid email format.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Invalid email format.", exception.getMessage());
     }
 
     @Test
@@ -106,20 +104,17 @@ public class LoanServiceImplTest {
         scoringData.setIsInsuranceEnabled(true);
         scoringData.setIsSalaryClient(true);
         scoringData.setGender(Gender.MALE);
-        scoringData.setBirthDate(LocalDate.of(2000, 1, 1));
+        scoringData.setBirthDate(LocalDate.of(2005, 1, 1));
         scoringData.setEmployment(new EmploymentDto());
         scoringData.getEmployment().setSalary(BigDecimal.valueOf(50000));
         scoringData.getEmployment().setEmploymentStatus(EmploymentStatus.EMPLOYED);
         scoringData.getEmployment().setWorkExperienceTotal(5);
         scoringData.setMaritalStatus(MaritalStatus.SINGLE);
 
-        try {
-            scoringData.setBirthDate(LocalDate.of(2005, 1, 1));
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.calculateCredit(scoringData);
-            Assertions.fail("Expected LoanServiceException due to invalid age");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Borrower age must be between 20 and 65 years.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Borrower age must be between 20 and 65 years.", exception.getMessage());
     }
 
     @Test
@@ -132,12 +127,10 @@ public class LoanServiceImplTest {
         request.setPassportNumber("12345");
         request.setBirthDate(LocalDate.of(1990, 1, 1));
 
-        try {
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.generateLoanOffers(request);
-            Assertions.fail("Expected LoanServiceException due to invalid passport details");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Invalid passport details.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Invalid passport details.", exception.getMessage());
     }
 
     @Test
@@ -150,12 +143,10 @@ public class LoanServiceImplTest {
         request.setPassportNumber("123456");
         request.setBirthDate(LocalDate.of(1990, 1, 1));
 
-        try {
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.generateLoanOffers(request);
-            Assertions.fail("Expected LoanServiceException due to loan amount below minimum");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Loan amount must be at least 20000.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Loan amount must be at least 20000.", exception.getMessage());
     }
 
     @Test
@@ -168,12 +159,10 @@ public class LoanServiceImplTest {
         request.setPassportNumber("123456");
         request.setBirthDate(LocalDate.of(1990, 1, 1));
 
-        try {
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.generateLoanOffers(request);
-            Assertions.fail("Expected LoanServiceException due to loan term below minimum");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Loan term must be at least 6 months.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Loan term must be at least 6 months.", exception.getMessage());
     }
 
     @Test
@@ -186,12 +175,10 @@ public class LoanServiceImplTest {
         request.setPassportNumber("123456");
         request.setBirthDate(LocalDate.now().minusYears(17));
 
-        try {
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.generateLoanOffers(request);
-            Assertions.fail("Expected LoanServiceException due to borrower below minimum age");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Borrower must be at least 18 years old.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Borrower must be at least 18 years old.", exception.getMessage());
     }
 
     @Test
@@ -210,12 +197,10 @@ public class LoanServiceImplTest {
         employment.setWorkExperienceCurrent(1);
         scoringData.setEmployment(employment);
 
-        try {
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.calculateCredit(scoringData);
-            Assertions.fail("Expected LoanServiceException due to insufficient work experience");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Insufficient work experience.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Insufficient work experience.", exception.getMessage());
     }
 
     @Test
@@ -234,12 +219,10 @@ public class LoanServiceImplTest {
         employment.setWorkExperienceCurrent(10);
         scoringData.setEmployment(employment);
 
-        try {
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.calculateCredit(scoringData);
-            Assertions.fail("Expected LoanServiceException due to loan amount exceeding income limit");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Loan amount exceeds 24 times monthly income.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Loan amount exceeds 24 times monthly income.", exception.getMessage());
     }
 
     @Test
@@ -258,12 +241,10 @@ public class LoanServiceImplTest {
         employment.setWorkExperienceTotal(20);
         employment.setWorkExperienceCurrent(10);
 
-        try {
+        LoanServiceException exception = Assertions.assertThrows(LoanServiceException.class, () -> {
             loanService.calculateCredit(scoringData);
-            Assertions.fail("Expected LoanServiceException due to unemployed borrower");
-        } catch (LoanServiceException e) {
-            Assertions.assertEquals("Loan cannot be issued to unemployed borrowers.", e.getMessage());
-        }
+        });
+        Assertions.assertEquals("Loan cannot be issued to unemployed borrowers.", exception.getMessage());
     }
 
     @Test
